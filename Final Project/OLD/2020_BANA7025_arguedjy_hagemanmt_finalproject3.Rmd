@@ -1,0 +1,282 @@
+---
+title: "Final Project - Popular Spotify Songs"
+author: "Johnny Arguedas & Mark Hageman"
+date: "11/18/2020"
+output: 
+  html_document:
+    css: "style.css"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Section 1: Introduction
+
+<!-- Requirement 1.1   -->
+
+Streaming music services have been able to collect a wealth of data for song characteristics, amount of streams, and user interaction. Spotify has taken this data to create playlists curated to a user's taste based on their listening habits. Considering how songs have been quantified by Spotify, is it possible to find correlations for a song's popularity based on the other quantifiable fields Spotify makes available? 
+
+<!-- Requirement 1.2   -->
+
+With the [Spotify](https://www.spotify.com/us/) dataset retrieved with the `spotifyr` package, we will look at 12 variables from almost 33,000 songs and see how they interact with each other, and whether they are significant in determining popularity. As genres of music can have very different characteristics, it may make more sense to gauge popularity based on each genre's representative statistics rather than overall.  
+
+<!-- Requirement 1.3   -->
+
+We will first compare variables to determine which have influence on the popularity of a song. We will then apply a multiple linear regression to the data to make a prediction as to what characteristics are likely, within each genre, to produce a popular song.
+
+<!-- Requirement 1.4   -->
+
+A predictive model of popularity can help songwriters craft a song based on data-driven methods. Users will also benefit by being able to discover songs based on their preferred characteristics, and see whether they prefer more or less popular songs.
+ 
+### Section 2: Required Packages
+
+<!-- Requirements: 2.1, 2.2 -->
+```{r RequiredPackages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(scales)
+library(table1)
+library(htmltools)
+library(cowplot)
+library(rlang)
+library(Hmisc)
+library(gridExtra)
+```
+
+<!-- Requirement: 2.3 -->
+This analysis will make use of the following packages:
+
+* [tidyverse](https://www.tidyverse.org/) - A collection of various packages
+designed to make it easier to make data tidy for analysis.
+* [scales](https://www.rdocumentation.org/packages/scales/versions/0.4.1) - A package with various string formatting functions.
+* [table1](https://cran.r-project.org/web/packages/table1/vignettes/table1-examples.html) - A package for the creation of HTML tables of descriptive statistics.
+* [htmltools](https://cran.r-project.org/web/packages/htmltools/index.html) - A package to enable the inclusion of external HTML files.
+* [cowplot](https://cran.r-project.org/web/packages/cowplot/vignettes/introduction.html) - A package that enhances ggplot by adding themes,  
+
+### Section 3: Data Preparation
+
+``` {r data_import}
+songs <- read.csv('spotify_songs.csv', stringsAsFactors = FALSE)
+```
+
+<!-- Requirement: 3.1 -->
+The data used in this analysis is available as part of the [tidytuesdayR](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-01-21/readme.md) package, and is also available for download [here](https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv]https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv).
+
+The codebook is also available on the [tidytuesday](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-01-21/readme.md) GitHub page.
+
+<!-- Requirement: 3.2 -->
+The data set, which was originally created on 2020-01-21, consists of `r format(nrow(songs), nsmall=1, big.mark=",")` records, each with `r ncol(songs)` columns. Each record represents a single song, and the columns represent various aspects of each song:
+
+```{r requirement_3.2}
+htmltools::includeHTML("codebook.html")
+```
+
+***
+
+Because the columns are named sensibly, we won't need to re-name any of them.
+
+<!-- Requirement: 3.3 -->
+In examining the structure of the data set, we can see that `track_album_release_date` should be re-formatted as a date, and that `playlist_genre` and `playlist_subgenre` should be made into factors.
+
+``` {r view_structure}
+str(songs)
+songs$track_album_release_date <- as.Date(songs$track_album_release_date)
+songs$playlist_genre <- as.factor(songs$playlist_genre)
+songs$playlist_subgenre <- as.factor(songs$playlist_subgenre)
+```
+
+Is there any missing data?
+
+``` {r NA_colsums}
+nrow(songs[complete.cases(songs), ])
+colSums(is.na(songs))
+```
+
+The NA values in this data set exist in the `track_name`, `track_artist`, `track_album_name`, and `track_album_release_date`. Given the nature of the columns with missing values, it does not make sense for us to make any imputations. 
+
+How many rows still have missing data?
+
+``` {r remaining_rows_missing_data}
+na_rows <- nrow(songs) - nrow(songs[complete.cases(songs), ])
+pct_na_rows <- na_rows / nrow(songs)
+```
+
+Only `r na_rows` rows are still missing data at this point. This is only about 
+`r label_percent()(pct_na_rows)` of the total number of rows, so we'll just drop those rows from the data set.
+
+``` {r drop_remaining_rows_with_na}
+songs <- na.omit(songs)
+```
+
+Next we'll look at summaries of each of the numeric values to be sure they make sense, and check for any outliers.
+
+``` {r numeric_summaries}
+summary(songs)
+songs %>%
+  summarise_if(is.numeric, mean)
+```
+
+There do not appear to be any outliers among the numeric variables, and all values are within the stated ranges (i.e., values such as `danceability` and `energy` are measured on a scale of 0.0 - 1.0). `mode` is binary variable with 0 and 1 as the only possible values. The longest song has a duration of `r max(songs$duration_ms)`, which is about 
+`r round((max(songs$duration_ms) / 1000 / 60), 2)` minutes, which seems entirely reasonable.
+
+Finally, there are several columns we won't need for our analysis, so we'll drop them here:
+
+```{r drop_unused_columns}
+unused_cols <- c('track_id', 'track_album_id', 'track_album_name', 
+                 'playlist_name', 'playlist_id', 'playlist_subgenre')
+songs <- songs[ , -which(names(songs) %in% c(unused_cols))]
+```
+
+<!-- Requirement: 3.4 -->
+The data is now clean, with `r nrow(songs)` observations of `r ncol(songs)` variables. Here's what it looks like:
+
+``` {r view_clean_data}
+dim(songs)
+head(songs)
+```
+
+<!-- Requirement 3.5 -->
+The variables we are concerned with are `track_album_release_date`, `track_artist`, and `playlist_genre`, and the quantifying variables `track_popularity`, `danceability`, `energy`, `key`, `loudness`, `mode`, `speechiness`, `acousticness`, `instrumentalness`, `liveness`, and `valence`. 
+
+* **track_artist**: There are `r format(n_distinct(songs$track_artist), nsmall=1, big.mark=",")` distinct artists in this data set.
+* **playlist_genre**: Each song is classified by one of `r n_distinct(songs$playlist_genre)` distinct genres.
+
+
+### Section 4: Proposed Exploratory Data Analysis
+
+What is the makeup of songs in our data set, in terms of genre?
+
+Here are summaries of the numeric columns of interest, broken down by 
+playlist_genre:
+
+```{r summarize_numeric_colums}
+table1::table1(~ track_popularity + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness +liveness + valence | playlist_genre, data = songs)
+```
+
+```{r, fig.align='center'}
+songs %>% ggplot(aes(x = playlist_genre, fill = playlist_genre)) + 
+  geom_bar() +
+  ggtitle("Number of Songs Within Each Genre") +
+  scale_fill_discrete(name = "Genre") +
+  scale_x_discrete(name = NULL) + 
+  scale_y_continuous(expand = c(0, 0), name = "Count of \n Songs") +
+  theme(axis.title.y = element_text(angle = 0, vjust = .5)) + 
+  theme(panel.grid.major.x = element_blank()) + 
+  coord_cartesian(ylim = c(0, 7000))
+```
+  
+  As we can see, the makeup of songs in our dataset is pretty even, with EDM at the highest and rock at the lowest. 
+  
+  How do the genres rank in terms of popularity?
+  
+```{r, message = FALSE, fig.align='center'}
+popularity_means <- songs %>% 
+  group_by(playlist_genre) %>%
+  dplyr::summarize(mean_popularity = mean(track_popularity))
+
+popularity_means %>% 
+  ggplot(aes(x = playlist_genre, 
+             y = mean_popularity, 
+             fill = playlist_genre)) + 
+  geom_bar(stat = "identity") +
+  ggtitle("Average Popularity of Each Genre") +
+  scale_fill_discrete(name = "Genre") +
+  scale_x_discrete(name = NULL) + 
+  scale_y_continuous(expand = c(0,0), name = "Average \n Popularity") +
+  theme(axis.title.y = element_text(angle = 0, vjust = .5)) + 
+  theme(panel.grid.major.x = element_blank()) + 
+  coord_cartesian(ylim = c(0, 55))
+```  
+  
+  Who are the most and least popular artists with at least five tracks in the dataset?
+  
+```{r most_popular, message = FALSE}
+# most popular 
+songs %>% 
+  group_by(track_artist) %>%
+  filter(n() >= 5) %>% 
+  dplyr::summarize(mean_popularity = mean(track_popularity)) %>% 
+  arrange(desc(mean_popularity)) %>% 
+  slice_head(n = 10) 
+```
+
+
+```{r least_popular, message = FALSE}
+# least popular 
+songs %>% 
+  group_by(track_artist) %>%
+  filter(n() >= 5) %>%
+  dplyr::summarize(mean_popularity = mean(track_popularity)) %>% 
+  arrange(mean_popularity) %>% 
+  slice_head(n = 10)
+```
+
+How many cross-genre artists are there?
+
+``` {r cross-genre_artists, message = FALSE}
+songs %>% 
+  group_by(track_artist) %>% 
+  dplyr::summarize(n_unique = n_distinct(playlist_genre)) %>% 
+  filter(n_unique >= 2) %>% 
+  count()
+```
+
+Which artists have tracks in the greatest variety of genres? 
+``` {r cross-genre_count, message = FALSE}
+songs %>% 
+  group_by(track_artist) %>% 
+  dplyr::summarize(n_unique = n_distinct(playlist_genre)) %>% 
+  filter(n_unique >= 2) %>% 
+  arrange(desc(n_unique)) %>% 
+  slice_head(n = 10)
+```
+
+What dates are covered in the data set?
+
+```{r release_date_range}
+min(songs$track_album_release_date)
+max(songs$track_album_release_date)
+```
+
+<!-- Requirement 4.1   -->
+
+We will now compare genre characteristics in boxplots.
+
+```{r genre_boxplots}
+myplots <- 
+  map(names(songs %>% select(where(is.numeric)) %>% select(-mode)), 
+      function(colName) {
+        songs %>% 
+          ggplot(aes(x = playlist_genre,
+                     y = !! sym(colName),
+                     fill = playlist_genre)) +
+          geom_boxplot() +
+          theme(legend.position = "NONE") +
+          labs(title = capitalize(colName), x = "", y = "")
+    })
+gridExtra::grid.arrange(grobs = myplots[c(1:4)])
+gridExtra::grid.arrange(grobs = myplots[c(5:8)])
+gridExtra::grid.arrange(grobs = myplots[c(9:12)])
+```
+
+We will now compare the variables in pairs to determine if any influence the other, and whether they are significant to the overall model. New variable creation will not be necessary, and perhaps further grouping by the variable `liveness` or `instrumentalness` may be helpful as well. 
+ 
+<!-- Requirement 4.2   -->
+
+By listing summary tables of variables we can see representative characteristics within each genre. Scatter plots, histograms, box plots, and plot pairs will help visualize correlations.  
+
+<!-- Requirement 4.3   -->
+
+We will need to research if multiple linear regression is adequate for this type of data, or if there are other analysis methodologies that we should research as well.
+
+<!-- Requirement 4.4   -->
+
+Multiple linear regression will be used to determine correlation and build our predictive model. 
+
+### Section 6: Summary
+
+
+### References
+
+

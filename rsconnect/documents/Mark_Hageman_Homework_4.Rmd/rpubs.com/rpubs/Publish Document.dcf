@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/689257/bd52b50c4d8e4fbcb2928e8bb3a7508a
+bundleId: https://api.rpubs.com/api/v1/document/689257/bd52b50c4d8e4fbcb2928e8bb3a7508a
+url: http://rpubs.com/mhageman27/689257
+when: 1605486021.11506

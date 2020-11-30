@@ -1,0 +1,38 @@
+Which variables correlate most strongly with popularity (track_popularity)?
+
+Which artists (track_artist) rank highest in popularity (track_popularity)?
+
+*Which artists produce a greater variety in various song aspects?*
+
+*Do the different genres (playlist_genre) have distinct combinations of other song aspects? (i.e., speechiness, acousticness, loudness, instrumentalness, etc.) In other words, is it possible to identify genre by a combination of things like danceability, energy, key, etc.? Are any aspects or combinations of aspects reliable predictors of genre?*
+
+---
+
+Can we construct a predictive model of popularity based on the variables present in this data?
+
+
+Johnny Arguedas and I are working together for this project. Here are the questions we're thinking of focusing on:
+
+    What is the makeup of songs in our dataset, in terms of genre?
+    What are the characteristics of each genre?
+    Which artists are more or less popular?
+    Are there any cross-genre artists?
+    What dates are covered in the dataset?
+    Does the release date of a song influence its popularity?
+    Do we see relationships between individual variables?
+    What variables influence popularity overall?
+    What variables influence popularity between each genre?
+    Do album ratings and song popularity have any correlation?
+
+I think our overall goal will be to try to determine if different combinations of song aspects (such as danceability, acousticness, etc.) can be used to predict popularity. We suspect that any multiple linear regression model that we come up with will most likely not predict popularity with a high degree of reliability (we're expecting low values for R-squared). Rather than finding a fool-proof popularity "formula", I think our goal will be to determine the effect that different levels of the various aspects have on popularity, and the degree to which certain combinations can be correlated with popularity, whether positively or negatively.
+We will likely limit ourselves to one dataset (the Spotify data), but I believe Johnny has an idea about a couple of external data sets that may prove useful.
+
+Hi Professor Zu, here is the coding exercise for week 5: A wide variety of plots will be necessary to address the questions we have raised. Specifically:
+·        A histogram (geom_histogram) would show the distribution of songs by genre (question 1).
+·        A boxplot (geom_box) would be a good choice to show specific characteristics of songs by genre (question 2). A scatter plot could also work, and facetting could come in handy here as well as there are a number of characteristics to investigate. Using jitter to distinguish individual songs will really help with boxplots, given the large number of songs to be considered.
+·        A barplot (geom_bar) would enable us to compare popularity among artists (question 3), but we will likely need to limit the number of artists in a single comparison because there are so many. Using coord_flip to rotate the chart so that artist names can be read horizontally will be a big help. Another possibility would be to consider popularity by genre instead of by individual artist. This would reduce the number of bars to be displayed.
+·        A scatterplot (geom_point) of popularity by release date would enable us to detect an obvious relationship (question 6).  We could distinguish between genres by using a different color for each one.
+·        Correlation plots would work for questions 7 - 10. One option would be to use the ggcorrplot method from the package by the same name. Facetting could potentially help with question 9 by enabling us to compare multiple song characteristics simultaneously.
+I don't envision needing any unique statistical transformations, but this may become necessary as we investigate further.
+
+

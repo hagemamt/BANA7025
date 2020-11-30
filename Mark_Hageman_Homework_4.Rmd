@@ -1,0 +1,46 @@
+---
+title: "BANA 7025 - Homework 4"
+author: "Mark Hageman"
+date: "11/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Cincinnati Reds - Wins and Losses by season since 1960
+
+The data set I chose comes from the 2018 version of Lahman's Baseball Database, which is freely available at the website [http://www.seanlahman.com/baseball-archive/statistics/](http://www.seanlahman.com/baseball-archive/statistics/).
+
+Specifically, the chart below is a graphical display of wins and losses by the Cincinnati Reds since 1960. Wins are represented by the blue line, and losses by the red. The graph makes it clear that the Reds enjoyed tremendous success during the 1960s and 1970s, but the record has been decidedly mixed in the last 40 years.The Reds only had four winning seasons between 2000 and 2018.
+
+```{r libraries, echo=FALSE, results='hide', message=FALSE}
+library(Lahman)
+library(tidyverse)
+```
+
+```{r get_data, echo=FALSE}
+data(Teams)
+```
+
+```{r chart, echo=FALSE}
+Teams %>% 
+  filter(yearID >= 1960, teamID == 'CIN') %>% 
+  group_by(yearID) %>% 
+  ggplot(aes(x = yearID)) +
+  geom_line(aes(y = W, color = 'blue')) +
+  geom_line(aes(y = L, color = 'red')) +
+  scale_y_continuous(name = 'Wins') +
+  ggtitle('Cincinnati Reds',
+          subtitle = 'Wins and losses by season (since 1960)') +
+  scale_color_identity(breaks = c('blue', 'red'),
+                       labels = c('Wins', 'Losses'),
+                       guide = 'legend') +
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.title = element_blank())
+```
+
+

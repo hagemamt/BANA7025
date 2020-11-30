@@ -1,0 +1,144 @@
+---
+title: "Project - Midterm"
+author: "Johnny Arguedas & Mark Hageman"
+date: "11/01/2020"
+output: 
+  html_document:
+    css: "style.css"
+---
+
+<<insertHTML:[codebook.html]
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Section 1: Introduction
+
+
+
+
+### Section 2: Required Packages
+
+<!-- Requirements: 2.1, 2.2 -->
+```{r RequiredPackages}
+library(tidyverse)
+library(scales)
+library(table1)
+```
+
+<!-- Requirement: 2.3 -->
+This analysis will make use of the following packages:
+
+* [tidyverse](https://www.tidyverse.org/) - A collection of various packages
+designed to make it easier to make data tidy for analysis.
+* [scales](https://www.rdocumentation.org/packages/scales/versions/0.4.1) - A package with various string formatting functions.
+* [table1](https://cran.r-project.org/web/packages/table1/vignettes/table1-examples.html) - A package for the creation of HTML tables of descriptive statistics.
+
+### Section 3: Data Preparation
+
+``` {r data_import}
+songs <- read.csv('spotify_songs.csv', stringsAsFactors = F)
+```
+
+<!-- Requirement: 3.1 -->
+The data used in this analysis is available as part of the [tidytuesdayR](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-01-21/readme.md) package, and is also availble for download at [https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv]https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv.
+
+The codebook is also available on the [tidytuesday](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-01-21/readme.md) GitHub page.
+
+<!-- Requirement: 3.2 -->
+The data set, which was originally created on 2020-01-21, consists of `r format(nrow(songs), nsmall=1, big.mark=",")` records, each with `r ncol(songs)` columns. Each record represents a single song, and the columns represent various aspects of each song:
+
+```{r requirement_3.2}
+htmltools::includeHTML("codebook.html")
+```
+
+
+Because the columns are named sensibly, we won't need to re-name any of them.
+
+<!-- Requirement: 3.3 -->
+In examining the structure of the data set, we can see that track_album_release_date should be re-formatted as a date, and that playlist_genre and playlist_subgenre should be made into factors.
+
+``` {r view_structure}
+str(songs)
+songs$track_album_release_date <- as.Date(songs$track_album_release_date)
+songs$playlist_genre <- as.factor(songs$playlist_genre)
+songs$playlist_subgenre <- as.factor(songs$playlist_subgenre)
+```
+
+Is there any missing data?
+
+``` {r NA_colsums}
+nrow(songs[complete.cases(songs), ])
+colSums(is.na(songs))
+```
+
+The NA values in this data set exist in the "track_name", "track_artist", "track_album_name", and "track_album_release_date". Given the nature of the columns with missing values, it does not make sense for us to make any imputations. Since we aren't using the "track_album_release_date" in our analysis, we'll just drop it from the data set.
+
+``` {r drop_na_values_in_track_album_release_date_field}
+songs <- songs[ , !(names(songs) %in% c("track_album_release_date"))]
+```
+
+How many rows still have missing data?
+
+``` {r remaining_rows_missing_data}
+na_rows <- nrow(songs) - nrow(songs[complete.cases(songs), ])
+pct_na_rows <- na_rows / nrow(songs)
+```
+
+Only `r na_rows` rows are still missing data at this point. This is only about 
+`r label_percent()(pct_na_rows)` of the total number of rows, so we'll just drop those rows from the data set.
+
+``` {r drop_remaining_rows_with_na}
+songs <- na.omit(songs)
+```
+
+Next we'll look at summaries of each of the numeric values to be sure they make sense, and check for any outliers.
+
+``` {r numeric_summaries}
+summary(songs)
+songs %>%
+  summarise_if(is.numeric, mean)
+```
+
+There do not appear to be any outliers among the numeric variables, and all values are within the stated ranges (i.e., values such as "danceability" and "energy" are measured on a scale of 0.0 - 1.0). "mode" is binary variable with 0 and 1 as the only possible values. The longest song has a duration of `r max(songs$duration_ms)`, which is about 
+`r round((max(songs$duration_ms) / 1000 / 60), 2)` seconds, which seems entirely reasonable.
+
+Finally, there are several columns we won't need for our analysis, so we'll drop them here:
+
+```{r drop_unused_columns}
+unused_cols <- c('track_id', 'track_album_id', 'track_album_name', 
+                 'playlist_name', 'playlist_id', 'playlist_subgenre')
+songs <- songs[ , -which(names(songs) %in% c(unused_cols))]
+```
+
+<!-- Requirement: 3.4 -->
+The data is now clean, with `r nrow(songs)` observations of `r ncol(songs)` variables. Here's what it looks like:
+
+``` {r view_clean_data}
+head(songs)
+```
+
+<!-- Requirement 3.5 -->
+The variables we are concerned with are "track_artist" and "playlist_genre", and the quantifying variables "track_popularity", "danceability", "energy", "key", "loudness", "mode", "speechiness", "acousticness", "instrumentalness", "liveness", and "valence". 
+
+* **track_artist**: There are `r format(n_distinct(songs$track_artist), nsmall=1, big.mark=",")` distinct artists in this data set.
+* **playlist_genre**: Each song is classified by one of `r n_distinct(songs$playlist_genre)` distinct genres.
+
+Here are summaries of the numeric columns of interest, broken down by 
+playlist_genre:
+
+```{r summrize_numeric_colums}
+table1::table1(~ track_popularity + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness +liveness + valence | playlist_genre, data = songs)
+```
+
+
+### Section 4: Proposed Exploratory Data Analysis
+
+
+### Section 6: Summary
+
+
+### References
+
+

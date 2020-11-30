@@ -1,0 +1,226 @@
+---
+title: "BANA 7025 - Homework 3"
+author: "Mark Hageman"
+date: "11/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(car)
+```
+
+## Importing Data and Cleaning Data
+
+*1. Import the data set using a Tidyverse function and NOT with a Base R function. How manyrows and columns are in the data set?*
+
+```{r Q.1}
+data <- read_csv('acs_2015_county_data_revised.csv',
+                 col_names = T)
+dim(data)
+```
+
+**There are `r nrow(data)` rows and `r ncol(data)` columns in this data set.**
+
+*2. Do any data types need changed? Show any code to change variable types and showcode/output for a `glimpse()` command after you’re finished.*
+
+```{r Q.2}
+str(data)
+glimpse(data)
+```
+
+**There do not appear to be any data types that need to be changed. The columns are all either character or numeric types, and each column appears to be typed appropriately.**
+
+
+*3. Are there any missing values? How will you handle missing values? Will you impute a missingvalue with, for example, a mean or median value for the entire column, or will you remove the entire observation? Give a rationale for your decision and show any code/output to handle missing values.*
+
+```{r Q.3}
+# find count of na values in each column
+colSums(is.na(data))
+# locate record with na income
+data[is.na(data$income), c('state', 'county', 'income')] 
+# impute median for income
+(median_income <- median(data$income, na.rm = T))
+data <- data %>% 
+  mutate(income = replace_na(income, median_income))
+
+# locate record with na child_poverty
+data[is.na(data$child_poverty), c('state', 'county', 'child_poverty')]
+# impute mean for child_poverty
+(mean_child_poverty <- mean(data$child_poverty, na.rm = T))
+data <- data %>% 
+  mutate(child_poverty = replace_na(child_poverty, mean_child_poverty))
+colSums(is.na(data))
+```
+
+**One observation has an `na` value for the `income` field, and one observation has an `na` value for the `child_poverty` column. It makes sense to impute these values using the median value for the `income` field, and the mean value for the `child_poverty` field. While the actual values for these fields may be off from the imputed values, `income` and `child_poverty` will not play a significant role in our analysis, and by imputing these values we can retain the observations.**
+
+
+*4. Use the `summary()` function to examine any unusual values. Are there any? If so, how will you handle these unusual values? Show any code/output to handle unusual values.*
+
+```{r Q.4}
+summary(data)
+data[which.max(data$hispanic), c('census_id', 'state', 'county', 'hispanic')]
+```
+
+**There do not appear to be any unusual values based on the summaries for each column. At first, the value of `hispanic` for Starr County, Texas appears as if it might be unusually high, but a quick search of [wikipedia.org](https://www.wikipedia.org/) reveals that, in fact, Starr County was about 95% Hispanic as of the 2010 U.S. census.**
+
+```{r}
+Boxplot(data$transit)
+data[which.max(data$transit), c('census_id', 'state', 'county', 'transit')]
+```
+
+**The maximum value of `transit` appears unusually high, but when we realize that Kings County, New York is the borough of Brooklyn in New York City, this value seems much more plausible.**
+
+```{r}
+data[which.max(data$child_poverty), 
+     c('census_id', 'state', 'county', 'child_poverty')]
+data[which.max(data$child_poverty), 
+     c('census_id', 'state', 'county', 'poverty')]
+```
+
+**Another possibly inaccurate value appears in the `child-poverty` column, but when we investigate a little further, we see that the same county (Merlette County in South Dakota) has a high value for `poverty`, indicating that the value for `child_poverty` is not an error.**
+
+**The conclusion, therefore, is that there are no inappropriately unusual values in the data set, so no changes are necessary.**
+
+## Data Manipulation and Insights
+
+*5. How many counties have more women than men?*
+
+```{r Q.5}
+nrow(data[data$men < data$women, ])
+```
+
+**There are `r nrow(data[data$men < data$women, ])` counties that have more women than men.**
+
+*6. How many counties have an unemployment rate lower than 10%?*
+
+```{r Q.6}
+nrow(data[data$unemployment < .1,])
+nrow(data[data$unemployment < 10,])
+```
+
+**There are `r nrow(data[data$unemployment < 10,])` counties that have an unemployment rate lower than 10%.**
+
+*7. What are the top 10 counties with the highest mean commute? Show the census ID, countyname, state, and the mean_commute in your final answer (sorted by mean_commute).*
+
+```{r Q.7}
+data %>% 
+  arrange(desc(mean_commute)) %>% 
+  slice_head(n = 10) %>%
+  select(census_id, county, state, mean_commute)
+```
+
+*8. Create a new variable that calculates the percentage of women for each county and then findthe top 10 counties with the lowest percentages. Show the census ID, county name, state,and the percentage in your final answer (sorted by ascending percentage).*
+
+```{r Q.8}
+data %>% 
+  mutate(pct_women = women / total_pop) %>% 
+  arrange(pct_women) %>% 
+  select(census_id, county, state, pct_women)
+```
+
+
+*9. Create a new variable that calculates the sum of all race percentage variables (these columnsare the “hispanic”, “white”, “black”, “native”, “asian”, and “pacific” variables).*
+
+* *a. What are the top 10 counties with the lowest sum of these race percentagevariables?*
+
+```{r Q.9a}
+data <- data %>% 
+  mutate(
+    sum_race_pct = 
+      round((hispanic + white + black + native + asian + pacific), 2)
+  ) 
+data %>% 
+  arrange(sum_race_pct) %>% 
+  slice_head(n = 10) %>% 
+  select(county, state, sum_race_pct)
+```
+
+* *b. Which state, on average, has the lowest sum of these race percentage variables?*
+
+```{r Q.9b}
+by_state <- group_by(data, state)
+summarize(by_state, avg_race_pct = mean(sum_race_pct)) %>% 
+  arrange(avg_race_pct) %>% 
+  slice_head(n = 1)
+```
+
+
+* *c. Do any counties have a sum greater than 100%?*
+
+```{r Q.9c}
+nrow(subset(data, data$sum_race_pct > 100))
+data %>% 
+  filter(sum_race_pct > 100) %>% 
+  select(state, county, sum_race_pct) %>% 
+  arrange(county)
+```
+
+**There are `r nrow(subset(data, data$sum_race_pct > 100))` counties that have a sum greater than 100.**
+
+* *d. How many states have a sum that equals exactly to 100%?*
+
+```{r Q.9d}
+nrow(subset(data, data$sum_race_pct == 100.0))
+data %>% 
+  filter(sum_race_pct == 100.0) %>% 
+  select(state, county, sum_race_pct) %>% 
+  arrange(county)
+```
+
+**`r nrow(subset(data, data$sum_race_pct == 100))` counties have a sum that is equal to 100%.**
+
+*10. Using the carpool variable,*
+
+* *a. Use the `dplyr::min_rank()` function to create a new variable called carpool_rank where the highest ranked county (rank = 1) is the county with the highest carpool value. Read the documentation carefully for the ranking function.*
+
+```{r Q.10a}
+data <- data %>% 
+  mutate(carpool_rank = min_rank(desc(data$carpool))) 
+```
+
+
+* *b. Find the 10 highest ranked counties for carpooling. Show the census ID, countyname, state, carpool value, and carpool_rank in your final answer.*
+
+```{r Q.10b}
+data %>% 
+  arrange(carpool_rank) %>% 
+  slice_head(n = 10) %>% 
+  select(census_id, county, state, carpool, carpool_rank)
+```
+
+
+* *c. Find the 10 lowest ranked counties for carpooling. Show the same variables in yourfinal answer.*
+
+```{r Q.10c}
+data %>% 
+  arrange(desc(carpool_rank)) %>% 
+  slice_head(n = 10) %>% 
+  select(census_id, county, state, carpool, carpool_rank)
+```
+
+
+* *d. On average, what state is the best ranked for carpooling?*
+
+```{r Q10.d}
+data %>% 
+  group_by(state) %>% 
+  summarize(avg_carpool = mean(carpool)) %>% 
+  arrange(desc(avg_carpool)) %>% 
+  slice_head(n = 1)
+```
+
+
+* *e. What are the top 5 states for carpooling?*
+
+```{r Q.10e}
+data %>% 
+  group_by(state) %>% 
+  summarize(avg_carpool = mean(carpool)) %>% 
+  arrange(desc(avg_carpool)) %>% 
+  slice_head(n = 5)
+```
+
+

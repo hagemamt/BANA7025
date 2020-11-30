@@ -1,0 +1,470 @@
+---
+title: "Final Project - Popular Spotify Songs"
+author: "Johnny Arguedas & Mark Hageman"
+date: "11/27/2020"
+output: 
+  html_document:
+    css: "style.css"
+    code_folding: hide
+---
+
+<base target="_top"/>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Mid-term review for this project provided by Eunsun Yook** 
+
+### Section 1: Introduction
+
+<!-- Requirement 1.1   -->
+
+Streaming music services have been able to collect a wealth of data for song characteristics, amount of streams, and user interaction. Spotify has taken this data to create playlists curated to a user's taste based on their listening habits. Considering how songs have been quantified by Spotify, is it possible to find correlations for a song's popularity based on the other quantifiable fields Spotify makes available? 
+
+<!-- Requirement 1.2   -->
+
+With the [Spotify](https://www.spotify.com/us/) dataset retrieved with the `spotifyr` package, we will look at 12 variables from almost 33,000 songs and see how they interact with each other, and whether they are significant in determining popularity. As genres of music can have very different characteristics, it may make more sense to gauge popularity based on each genre's representative statistics rather than overall.  
+
+<!-- Requirement 1.3   -->
+
+We will first compare variables to determine which have influence on the popularity of a song. We will then apply a multiple linear regression to the data to make a prediction as to what characteristics are likely to produce a popular song.
+
+<!-- Requirement 1.4   -->
+
+A predictive model of popularity can help songwriters craft a song based on data-driven methods. Users will also benefit by being able to discover songs based on their preferred characteristics, and see whether they prefer more or less popular songs.
+ 
+### Section 2: Required Packages
+
+<!-- Requirements: 2.1, 2.2 -->
+```{r RequiredPackages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(scales)
+library(table1)
+library(htmltools)
+library(cowplot)
+library(rlang)
+library(Hmisc)
+library(gridExtra)
+library(ggcorrplot)
+```
+
+<!-- Requirement: 2.3 -->
+This analysis will make use of the following packages:
+
+* [tidyverse](https://www.tidyverse.org/) - A collection of various packages
+designed to make it easier to make data tidy for analysis
+* [scales](https://www.rdocumentation.org/packages/scales/versions/0.4.1) - A package with various string formatting functions
+* [table1](https://cran.r-project.org/web/packages/table1/vignettes/table1-examples.html) - A package for the creation of HTML tables of descriptive statistics
+* [htmltools](https://cran.r-project.org/web/packages/htmltools/index.html) - A package to enable the inclusion of external HTML files
+* [cowplot](https://cran.r-project.org/web/packages/cowplot/vignettes/introduction.html) - A package that enhances ggplot by adding themes
+* [rlang](https://cran.r-project.org/web/packages/rlang/index.html) - A package that provides tools to work with core features of R and `tidyverse`
+* [Hmisc](https://cran.r-project.org/web/packages/Hmisc/index.html) - A package that contains many functions useful for data analysis, high-level graphics, utility operations, and more
+* [gridExtra](https://cran.r-project.org/web/packages/gridExtra/index.html) - A package to help work with "grid" graphics 
+* [ggcorrplot](https://cran.r-project.org/web/packages/ggcorrplot/) - A package to produce a visualized correlation matrix using `ggplot2`
+
+### Section 3: Data Preparation
+
+<!-- Requirement: 3.1 -->
+The data used in this analysis is available as part of the [tidytuesdayR](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-01-21/readme.md) package, and is also available for download [here](https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv). 
+
+The codebook is also available on the [tidytuesday](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-01-21/readme.md) GitHub page.
+
+``` {r data_import}
+songs <- read.csv('spotify_songs.csv', stringsAsFactors = FALSE)
+```
+
+<!-- Requirement: 3.2 -->
+The data set, which was originally created on 2020-01-21, consists of `r format(nrow(songs), nsmall=1, big.mark=",")` records, each with `r ncol(songs)` columns. Each record represents a single song, and the columns represent various aspects of each song. The [codebook](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-01-21/readme.md#data-dictionary) includes the variable definitions.
+
+Because the columns are named sensibly, we won't need to re-name any of them.
+
+<!-- Requirement: 3.3 -->
+In examining the structure of the data set, we can see that `track_album_release_date` should be re-formatted as a date, and that `playlist_genre` and `playlist_subgenre` should be made into factors.
+
+``` {r view_structure, results = 'hide'}
+str(songs)
+songs$track_album_release_date <- as.Date(songs$track_album_release_date)
+songs$playlist_genre <- as.factor(songs$playlist_genre)
+songs$playlist_subgenre <- as.factor(songs$playlist_subgenre)
+```
+
+Is there any missing data?
+
+``` {r NA_colsums}
+nrow(songs[complete.cases(songs), ])
+colSums(is.na(songs))
+```
+
+The NA values in this data set exist in the `track_name`, `track_artist`, `track_album_name`, and `track_album_release_date`. Given the nature of the columns with missing values, it does not make sense for us to make any imputations. 
+
+How many rows still have missing data?
+
+``` {r remaining_rows_missing_data}
+na_rows <- nrow(songs) - nrow(songs[complete.cases(songs), ])
+pct_na_rows <- na_rows / nrow(songs)
+```
+
+Only **`r na_rows`** rows are still missing data at this point. This is only about 
+**`r label_percent()(pct_na_rows)`** of the total number of rows, so we'll just drop those rows from the data set.
+
+``` {r drop_remaining_rows_with_na}
+songs <- na.omit(songs)
+```
+
+Next we'll look at summaries of each of the numeric values to be sure they make sense, and check for any outliers.
+
+``` {r numeric_summaries}
+songs %>%
+  summarise_if(is.numeric, mean)
+```
+
+There do not appear to be any outliers among the numeric variables, and all values are within the stated ranges (i.e., values such as `danceability` and `energy` are measured on a scale of 0.0 - 1.0). `mode` is binary variable with 0 and 1 as the only possible values. The longest song has a duration of `r max(songs$duration_ms)`, which is about 
+`r round((max(songs$duration_ms) / 1000 / 60), 2)` minutes, which seems entirely reasonable.
+
+Finally, there are several columns we won't need for our analysis, so we'll drop them.
+
+```{r drop_unused_columns}
+unused_cols <- c('track_id', 'track_album_id', 'track_album_name', 
+                 'playlist_name', 'playlist_id', 'playlist_subgenre')
+songs <- songs[ , -which(names(songs) %in% c(unused_cols))]
+```
+
+<!-- Requirement: 3.4 -->
+The data is now clean, with **`r nrow(songs)`** observations of **`r ncol(songs)`** variables. Here's what it looks like:
+
+``` {r view_clean_data}
+head(songs)
+```
+
+<!-- Requirement 3.5 -->
+The variables we are concerned with are `track_album_release_date`, `track_artist`, and `playlist_genre`, and the quantifying variables `track_popularity`, `danceability`, `energy`, `key`, `loudness`, `mode`, `speechiness`, `acousticness`, `instrumentalness`, `liveness`, and `valence`. 
+
+* `track_artist`: There are `r format(n_distinct(songs$track_artist), nsmall=1, big.mark=",")` distinct artists in this data set.
+* `playlist_genre`: Each song is classified by one of `r n_distinct(songs$playlist_genre)` distinct genres.
+
+### Section 4: Proposed Exploratory Data Analysis
+
+What is the makeup of songs in our data set, in terms of genre?
+
+Here are summaries of the numeric columns of interest, broken down by 
+playlist_genre:
+
+```{r summarize_numeric_colums, results = 'hide'}
+table1::table1(~ track_popularity + danceability + energy + key + loudness + mode + speechiness + acousticness + instrumentalness +liveness + valence | playlist_genre, data = songs)
+```
+
+```{r, fig.align='center'}
+songs %>% ggplot(aes(x = playlist_genre, fill = playlist_genre)) + 
+  geom_bar() +
+  ggtitle("Number of Songs Within Each Genre") +
+  scale_fill_discrete(name = "Genre") +
+  scale_x_discrete(name = NULL) + 
+  scale_y_continuous(expand = c(0, 0), name = "Count of \n Songs") +
+  theme(axis.title.y = element_text(angle = 0, vjust = .5)) + 
+  theme(panel.grid.major.x = element_blank()) + 
+  coord_cartesian(ylim = c(0, 7000))
+```
+  
+ As we can see, the makeup of songs in our dataset is pretty even, with EDM at the highest and rock at the lowest. 
+  
+ How do the genres rank in terms of popularity?
+  
+```{r, message = FALSE, fig.align='center'}
+popularity_means <- songs %>% 
+  group_by(playlist_genre) %>%
+  dplyr::summarize(mean_popularity = mean(track_popularity))
+
+popularity_means %>% 
+  ggplot(aes(x = playlist_genre, 
+             y = mean_popularity, 
+             fill = playlist_genre)) + 
+  geom_bar(stat = "identity") +
+  ggtitle("Average Popularity of Each Genre") +
+  scale_fill_discrete(name = "Genre") +
+  scale_x_discrete(name = NULL) + 
+  scale_y_continuous(expand = c(0,0), name = "Average \n Popularity") +
+  theme(axis.title.y = element_text(angle = 0, vjust = .5)) + 
+  theme(panel.grid.major.x = element_blank()) + 
+  coord_cartesian(ylim = c(0, 55))
+```  
+  
+  Who are the most and least popular artists with at least five tracks in the dataset?
+  
+  **Most popular:**
+  
+```{r most_popular, message = FALSE}
+# most popular 
+songs %>% 
+  group_by(track_artist) %>%
+  filter(n() >= 5) %>% 
+  dplyr::summarize(mean_popularity = mean(track_popularity)) %>% 
+  arrange(desc(mean_popularity)) %>% 
+  slice_head(n = 10) 
+```
+**Least popular:**
+
+```{r least_popular, message = FALSE}
+# least popular 
+songs %>% 
+  group_by(track_artist) %>%
+  filter(n() >= 5) %>%
+  dplyr::summarize(mean_popularity = mean(track_popularity)) %>% 
+  arrange(mean_popularity) %>% 
+  slice_head(n = 10)
+```
+
+Let's look at the makeup of our dataset in terms of time. What dates are covered?
+
+**Oldest track:**
+
+```{r release_date_oldest}
+min(songs$track_album_release_date)
+```
+
+**Newest track: **
+
+```{r release_date_newest}
+max(songs$track_album_release_date)
+```
+
+Next we look at the popularity of songs by year, using color to denote genre.
+
+```{r, fig.align='center'}
+songs %>% ggplot(aes(x = track_album_release_date, y = track_popularity, color = playlist_genre)) + 
+  geom_point(alpha = .5) +
+  ggtitle("Song Popularity by Year") +
+  scale_y_continuous(name = "Popularity") +
+  labs(color = "Genre", x = "Year") +
+  theme(axis.title.y = element_text(angle = 0, vjust = .5))
+```
+
+This plot is interesting, as it shows the timeline of when specific genres start to become dominant. 
+
+<!-- Requirement 4.1   -->
+
+We will now compare genre characteristics in boxplots.
+
+```{r fig.align='center'}
+myplots <- 
+  map(names(songs %>% select(where(is.numeric)) %>% select(-mode)), 
+      function(colName) {
+        songs %>% 
+          ggplot(aes(x = playlist_genre,
+                     y = !! sym(colName),
+                     fill = playlist_genre)) +
+          geom_boxplot() +
+          theme(legend.position = "NONE") +
+          labs(title = capitalize(colName), x = "", y = "")
+    })
+gridExtra::grid.arrange(grobs = myplots[c(1:4)])
+gridExtra::grid.arrange(grobs = myplots[c(5:8)])
+gridExtra::grid.arrange(grobs = myplots[c(9:12)])
+```
+
+We now compare the variables in pairs to determine if any influence the other, and whether they are significant to the overall model. New variable creation will not be necessary. 
+
+```{r fig.align='center'}
+corr_songs <-cor(songs %>% select(where(is.numeric)) %>% select(-mode))
+ggcorrplot(corr_songs, method = "circle", type ="lower")
+```
+
+We see few strong correlations. The most prevalent are `energy`, which correlates strongly with `loudness`, and `loudness` and `energy` negatively correlated with `acousticness`, which makes intuitive sense.
+
+Next, we will generate our explanatory multiple linear regression model by using forward selection to determine which variables will be used as covariates. 
+
+```{r forward_selection, message=FALSE, warning=FALSE, results = 'hide'}
+# forward selection base model
+add1(lm(track_popularity ~ 1, data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# instrumentalness has the highest significant F value, so add it first
+add1(lm(track_popularity ~ instrumentalness, data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# add energy
+add1(lm(track_popularity ~ instrumentalness + energy, data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# add loudness 
+add1(lm(track_popularity ~ instrumentalness + energy + loudness, 
+        data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# add valence
+add1(lm(track_popularity ~ instrumentalness + energy + loudness + valence, 
+        data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# add liveness
+add1(lm(track_popularity ~ instrumentalness + energy + loudness + valence
+        + liveness, 
+        data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# add acousticness
+add1(lm(track_popularity ~ instrumentalness + energy + loudness + valence
+        + liveness + acousticness, 
+        data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# add danceability
+add1(lm(track_popularity ~ instrumentalness + energy + loudness + valence
+        + liveness + acousticness + danceability, 
+        data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# add tempo
+add1(lm(track_popularity ~ instrumentalness + energy + loudness + valence
+        + liveness + acousticness + danceability + tempo, 
+        data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# add speechiness
+add1(lm(track_popularity ~ instrumentalness + energy + loudness + valence
+        + liveness + acousticness + danceability + tempo + speechiness, 
+        data = songs),
+     track_popularity ~ danceability + energy + key + loudness 
+     + speechiness + acousticness + instrumentalness + liveness 
+     + valence + tempo,
+     test = "F")
+
+# key is not found to be significant
+```
+
+Based on our forward selection process, our model will use `instrumentalness`, `energy`, `loudness`, `valence`, `liveness`, `acousticness`, `danceability`, `tempo`, and `speechiness` as covariates for the response variable `track_popularity`. `key` was not found to be significant, so it will not be included in the model. 
+
+```{r model1, message=FALSE, warning=FALSE}
+model1 <- lm(track_popularity ~ instrumentalness + energy + loudness + valence
+             + liveness + acousticness + danceability + tempo + speechiness, 
+             data = songs)
+summary(model1)
+```
+
+Our model only accounts for about 6% of the variation in `track_popularity`. Let's take a look at the QQ plot and histogram of our residuals to see if any improvements can be made. 
+
+```{r model1_adequacy_checking, fig.align='center', message=FALSE, warning=FALSE}
+par(mfrow = c(1,2))
+qqnorm(model1$residuals, main = "Q-Q Plot of Model 1 Residuals")
+qqline(model1$residuals)
+hist(model1$residuals, main = "Histogram of Model 1 Residuals")
+par(mfrow = c(1,1))
+```
+
+The QQ plot of the residuals shows a pattern that indicates non-normality in our residuals, and the histogram reveals light tails. These results suggest that transforming our response variable might be in order, so let's try that. We'll create five alternative models using the following transformations on `track_popularity`:
+
+* square root transformation
+* log transformation
+* reciprocal square root transformation
+* reciprocal transformation
+* arcsin transformation
+
+```{r transformation_models, message=FALSE, warning=FALSE}
+# square root transformation
+songs$sqrt_track_popularity <- sqrt(songs$track_popularity)
+model2 <- lm(sqrt_track_popularity ~ instrumentalness + energy + loudness + 
+               valence + liveness + acousticness + danceability + tempo + 
+               speechiness, 
+             data = songs)
+
+# log transformation
+songs$log_track_popularity <- log(songs$track_popularity)
+model3 <- lm(log_track_popularity ~ instrumentalness + energy + loudness + 
+               valence + liveness + acousticness + danceability + tempo + 
+               speechiness, 
+             data = songs[songs$log_track_popularity > -Inf,])
+
+# reciprocal square root transformation
+songs$recip_sqrt_track_popularity <- songs$track_popularity ^ (-.5)
+model4 <- lm(recip_sqrt_track_popularity ~ instrumentalness + energy + loudness + 
+               valence + liveness + acousticness + danceability + tempo + 
+               speechiness, 
+             data = songs[songs$log_track_popularity > -Inf,])
+
+# reciprocal transformation
+songs$recip_track_popularity <- songs$track_popularity ^ (-1)
+model5 <- lm(recip_track_popularity ~ instrumentalness + energy + loudness + 
+               valence + liveness + acousticness + danceability + tempo + 
+               speechiness, 
+             data = songs[songs$recip_sqrt_track_popularity < Inf,])
+
+# arcsin transformation
+songs$asin_track_popularity <- asin(songs$sqrt_track_popularity)
+model6 <- lm(asin_track_popularity ~ instrumentalness + energy + loudness + 
+               valence + liveness + acousticness + danceability + tempo + 
+               speechiness, 
+             data = songs[!(is.nan(songs$asin_track_popularity)),])
+```
+
+Unfortunately, none of our transformations had a beneficial effect on our residuals, as can be seen in the QQ plots of our alternate models.
+
+```{r alternate_model_qqplots, fig.align='center', message=FALSE, warning=FALSE}
+par(mfrow = c(2, 3))
+
+qqnorm(model2$residuals, main = "Square root")
+qqline(model2$residuals)
+
+qqnorm(model3$residuals, main = "Log")
+qqline(model3$residuals)
+
+qqnorm(model4$residuals, main = "Reciprocal square root")
+qqline(model4$residuals)
+
+qqnorm(model5$residuals, main = "Reciprocal")
+qqline(model5$residuals)
+
+qqnorm(model6$residuals, main = "Arcsin")
+qqline(model6$residuals)
+
+par(mfrow = c(1,1))
+```
+
+We can also tell by looking at our models' adjusted R-squared values that our original model performs better than any of our alternative models. 
+
+```{r adjRsqr_table, message=FALSE, warning=FALSE}
+(df <- data.frame(Model = c(1:6),
+                 Transformation = c("None",
+                                    "Square root",
+                                    "Log",
+                                    "Reciprocal square root",
+                                    "Reciprocal",
+                                    "Arcsin"), 
+                 AdjRsqr = c(summary(model1)$adj.r.squared,
+                             summary(model2)$adj.r.squared,
+                             summary(model3)$adj.r.squared,
+                             summary(model4)$adj.r.squared,
+                             summary(model5)$adj.r.squared,
+                             summary(model6)$adj.r.squared)))
+```
+
+
+### Section 6: Summary
+
+In this report, we attempted to build a predictive model for the popularity of songs in the Spotify dataset using multiple linear regression, and our model was derived using the forward selection process for variable selection. Our Spotify dataset contains a wide variety of music over 43 years, and it is evenly represented. Each genre of music has varying characteristics, but we were not able to derive a model to predict popularity as evidenced by our model's adjusted R-squared value of about 6%. This shows the unpredictability of a hit song, and how difficult it is to to write a song with the intent for it to be popular. Art is subjective and at times data cannot account for the fickleness of human taste. However, over the course of exploring the data we did notice an interesting insight regarding genres and popularity: New genres appear to generate popular songs. We believe this insight could provide an interesting avenue for further exploration of the relationship between genre and popularity, perhaps by constructing a model that takes release date into account. 
