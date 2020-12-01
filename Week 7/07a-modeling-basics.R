@@ -1,5 +1,5 @@
 library(tidyverse)
-library(modelr)
+library(modelr) # demo data sets
 options(na.action = na.warn)
 
 #################
@@ -78,10 +78,15 @@ sim4 %>%
 ##############
 # visualize relationships across all mtcars variables; which ones have appear to
 # have the strongest relationship to mpg?
-
+pairs(mtcars)
 
 # quantify the correlations and find the ones that are statistically significant
-
+mtcars %>% 
+  gather(var, value, -mpg) %>% 
+  group_by(var) %>% 
+  summarize(corr = cor(mpg, value),
+            p_value = cor.test(mpg, value)$p.value) %>% 
+  filter(p_value < 0.05)
 
 
 # Many questions remain such as:
@@ -116,14 +121,14 @@ fitted.values(sim1_mod)
 # Your Turn! #
 ##############
 # fit a linear model that regresses mpg onto wt with the mtcars data
-
+mtcars_model <- lm(mpg ~ wt, data = mtcars)
 
 # how does this model appear to fit (hint: summary)?
-
+summary(mtcars_model)
 
 # can you access the fitted values and residuals
-
-
+fitted.values(mtcars_model)
+residuals(mtcars_model)
 
 
 ######################
@@ -167,14 +172,28 @@ sim1 %>%
 # Your Turn! #
 ##############
 # fit a linear model that regresses mpg onto wt with the mtcars data
-
+mtcars_model <- lm(mpg ~ wt, data = mtcars)
 
 # how does this model appear to fit?
-
+summary(mtcars_model)
 
 # add the predictions and residuals to the mtcars data set and plot them
+mtcars %>%
+  add_predictions(mtcars_model) %>%
+  ggplot(aes(wt, mpg)) +
+  geom_point() +
+  geom_line(aes(y = pred), color = "red", size = 1)
 
+mtcars %>%
+  add_residuals(mtcars_model) %>%
+  ggplot(aes(resid)) +
+  geom_histogram(binwidth = .5)
 
+mtcars %>%
+  add_residuals(mtcars_model) %>%
+  ggplot(aes(wt, resid)) +
+  geom_ref_line(h = 0) +
+  geom_point()
 
 ######################################
 # Dealing with categorical variables #
@@ -212,12 +231,22 @@ summary(sim2b_mod)
 # Your Turn! #
 ##############
 # model mpg ~ cyl with cyl being categorical
-
+mtcars_mod_cyl <- lm(mpg ~ as.factor(cyl), data = mtcars)
+summary(mtcars_mod_cyl)
 
 # plot the predictions
-
+mtcars %>%
+  add_predictions(mtcars_mod_cyl) %>%
+  ggplot(aes(cyl, mpg)) +
+  geom_point() +
+  geom_point(aes(y = pred), color = "red", size = 4)
 
 # plot the residuals
+mtcars %>%
+  add_residuals(mtcars_mod_cyl) %>%
+  ggplot(aes(cyl, resid)) +
+  geom_ref_line(h = 0) +
+  geom_point()
 
 
 
@@ -263,16 +292,28 @@ mtcars_mod3 <- lm(mpg ~ wt + as.factor(cyl), data = mtcars)
 mtcars_mod4 <- lm(mpg ~ wt * as.factor(cyl), data = mtcars)
 
 # compare summaries
-
+summary(mtcars_mod3)
+summary(mtcars_mod4)
 
 # compare model matrix
-
+model_matrix(mtcars, mpg ~ wt + as.factor(cyl))
+model_matrix(mtcars, mpg ~ wt * as.factor(cyl))
 
 # compare predicted values
-
+mtcars %>% 
+  gather_predictions(mtcars_mod3, mtcars_mod4) %>%
+  ggplot(aes(wt, mpg, color = as.factor(cyl))) +
+  geom_point() +
+  geom_line(aes(y = pred)) +
+  facet_grid(model ~ as.factor(cyl))
 
 # compare residuals
-
+mtcars %>% 
+  gather_residuals(mtcars_mod3, mtcars_mod4) %>%
+  ggplot(aes(wt, resid, color = as.factor(cyl))) +
+  geom_ref_line(h = 0, size = 1) +
+  geom_point() +
+  facet_grid(model ~ as.factor(cyl))
 
 # what are your thoughts?
 

@@ -52,7 +52,8 @@ by_country <- gapminder %>%
 
 by_country
 
-# what is in each data column element? -- these kind of columns are called "list-columns"
+# what is in each data column element? 
+# these kind of columns are called "list-columns"
 by_country$data[[1]]
 
 
@@ -127,13 +128,36 @@ by_country %>%
 # Using the unnested glance data:
   
 # 1. Can you find the country models with the highest adjusted R2? What about the lowest?
+by_country %>% 
+  mutate(glance = map(model, broom::glance)) %>% 
+  unnest(glance) %>%
+  arrange(desc(adj.r.squared))
 
+by_country %>% 
+  mutate(glance = map(model, broom::glance)) %>% 
+  unnest(glance) %>%
+  arrange(adj.r.squared)
 
 # 2. Plot the adjusted R2 against each continent? What do you find?
-
+by_country %>% 
+  mutate(glance = map(model, broom::glance)) %>% 
+  unnest(glance) %>%
+  ggplot(aes(country, adj.r.squared)) +
+  geom_jitter(width = 0.25) +
+  facet_wrap(~ continent)
 
 # 3. Filter for adjusted R2 < 0.25. What countries do you find? What do you think is driving this bad fit? (Hint: plot the life expectancy over time for these countries)
 
+bad_fit <- by_country %>% 
+  mutate(glance = map(model, broom::glance)) %>% 
+  unnest(glance) %>%
+  filter(adj.r.squared < 0.25)
+
+gapminder %>% 
+  semi_join(bad_fit, by = "country") %>% 
+  ggplot(aes(year, lifeExp, colour = country)) +
+  geom_line()
 
 # what could this be from?
+# likely the tragedies of the HIV/AIDS epidemic and the Rwandan genocide
 

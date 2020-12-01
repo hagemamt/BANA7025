@@ -1,6 +1,7 @@
 # prerequisites
 library(tidyverse)
 library(modelr)
+library(hexbin)
 options(na.action = na.warn)
 
 ##############
@@ -34,10 +35,29 @@ ggplot(diamonds, aes(carat, price)) +
 # Your Turn - Part 1 #
 ######################
 # What is the strength of this linear trend? 
-
+cor.test(diamonds$carat, diamonds$price)
 
 # Does it differ depending on the different levels of cut, color, and clarity
+diamonds %>% group_by(cut) %>% 
+  summarise(corr = cor(carat, price))
 
+diamonds %>% group_by(color) %>% 
+  summarise(corr = cor(carat, price))
+
+diamonds %>% group_by(clarity) %>% 
+  summarise(corr = cor(carat, price))
+
+diamonds %>% ggplot(aes(carat, price, color = cut)) + 
+  geom_point() +
+  facet_wrap(~ cut, nrow = 2)
+
+diamonds %>% ggplot(aes(carat, price, color = color)) + 
+  geom_point() +
+  facet_wrap(~ color, nrow = 2)
+
+diamonds %>% ggplot(aes(carat, price, color = clarity)) + 
+  geom_point() +
+  facet_wrap(~ clarity, nrow = 2)
 
 # let's remove the price-carat relationship so we can see if there is still an
 # unusual relationship between price and cut, color, and clarity
@@ -46,18 +66,43 @@ ggplot(diamonds, aes(carat, price)) +
 # Your Turn - Part 2 #
 ######################
 # 1. Fit a linear model between the price and carat variables
-
+lm_carat_price <- lm(price ~ carat, data = diamonds)
 # 2. Assess model numerically
-
+summary(lm_carat_price)
 # 3. Get prediction and residual data and add it to the diamonds data set
-
+diamonds %>%
+  add_predictions(lm_carat_price) %>%
+  add_residuals(lm_carat_price)
 # 4. Visually assess model predictions
-
+diamonds %>%
+  add_predictions(lm_carat_price) %>% 
+  ggplot(aes(carat, price)) +
+  geom_point() +
+  geom_line(aes(y = pred), color = "red", size = 1)
 # 5. Visually assess model residuals
-
+diamonds %>%
+  add_residuals(lm_carat_price) %>% 
+  ggplot(aes(carat, resid)) +
+  geom_ref_line(h = 0) +
+  geom_point()
 # 6. Visually assess relationship between residuals and cut, color, clarity. What does this tell you?
+diamonds %>%
+  add_residuals(lm_carat_price) %>% 
+  ggplot(aes(cut, resid)) +
+  geom_ref_line(h = 0) +
+  geom_point()
 
+diamonds %>%
+  add_residuals(lm_carat_price) %>% 
+  ggplot(aes(color, resid)) +
+  geom_ref_line(h = 0) +
+  geom_point()
 
+diamonds %>%
+  add_residuals(lm_carat_price) %>% 
+  ggplot(aes(clarity, resid)) +
+  geom_ref_line(h = 0) +
+  geom_point()
 
 ############################
 # building onto this model #
@@ -103,4 +148,8 @@ diamonds3 %>%
 # Your Turn #
 #############
 # Lastly, how do the residuals look for this mod_diamond model?
-
+diamonds %>%
+  add_residuals(mod_diamond) %>% 
+  ggplot(aes(price, resid)) +
+  geom_ref_line(h = 0) +
+  geom_point()

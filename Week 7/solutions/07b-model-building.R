@@ -66,7 +66,7 @@ diamonds %>% ggplot(aes(carat, price, color = clarity)) +
 # Your Turn - Part 2 #
 ######################
 # 1. Fit a linear model between the price and carat variables
-lm_carat_price <- lm(price ~ carat, data = diamonds)
+lm_carat_price <- lm(log10(price) ~ log10(carat), data = diamonds)
 # 2. Assess model numerically
 summary(lm_carat_price)
 # 3. Get prediction and residual data and add it to the diamonds data set
